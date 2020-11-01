@@ -8,6 +8,8 @@ pylint = "*"
 
 [packages]
 pymongo = {extras = ["srv", "tls"], version = "*"}
+flask = "*"
+bcrypt = "*"
 
 [requires]
 python_version = "3.8"
