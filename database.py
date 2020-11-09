@@ -14,7 +14,9 @@ def initialize_client():
     password = config["mongodb"]["password"]
     dbname = config["mongodb"]["dbname"]
 
+    print("Attempting to initialize client ...")
     client = MongoClient(f"mongodb+srv://{username}:{password}@cluster0.kcedc.mongodb.net/{dbname}?retryWrites=true&w=majority")
+    print("Successfully initialized client")
 
     return client
 

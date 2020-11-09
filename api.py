@@ -1,9 +1,10 @@
-import database
-import encoder
 import bcrypt
 import flask
 from bson.objectid import ObjectId
-from flask import request, jsonify, make_response
+from flask import jsonify, make_response, request
+
+import database
+import encoder
 
 app = flask.Flask(__name__)
 app.json_encoder = encoder.MongoEncoder
@@ -24,6 +25,7 @@ def signup():
 
     users = database.connect("users")
 
+    print("Connected to users table.")
     if users.count_documents({"username": username}) != 0:
         return "ERROR: there is already an account registered under this username!"
 
@@ -137,10 +139,33 @@ def create_board():
 
     return "Successfully created new board"
 
-def get_board(user, board_name):
-    pass
+@app.route("/boards/<board_name>", methods = ["GET"])
+def get_board(board_name):
+    """
+    Loads a board for the logged in user. Fails if the given
+    board name does not exist for the user.
+    """
+    userid = request.cookies.get("userID")
 
-def add_item(user, board, item_name):
+    users = database.connect("users")
+    boards = database.connect("boards")
+
+    current_user = users.find_one({"_id": ObjectId(userid)})
+    if not current_user:
+        return "ERROR: there was an error finding the user"
+
+    user_boardIDs = current_user["board_ids"]
+    for boardID in user_boardIDs:
+        board = boards.find_one({"_id": boardID})
+        if not board:
+            return "ERROR: there was an issue loading a users' board"
+        if board["board_name"] == board_name:
+            return make_response(jsonify(board), 200)
+    
+    return "ERROR: user does not have a board with the given name"
+
+@app.route("/boards/<board_name>/add", methods = ["GET", "POST"])
+def add_item(board_name):
     pass
 
 def update_details(user, board, item_id, new_details):
