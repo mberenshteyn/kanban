@@ -24,5 +24,6 @@ def connect(collection: str, db = "test"):
     """
     Initializes the MongoDB client and connects to a specific collection in the client.
     """
-    client = initialize_client()
     return client[db][collection]
+
+client = initialize_client()

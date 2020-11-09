@@ -1,13 +1,15 @@
 import bcrypt
 import flask
+import secrets
 from bson.objectid import ObjectId
-from flask import jsonify, make_response, request
+from flask import jsonify, make_response, request, session
 
 import database
 import encoder
 
 app = flask.Flask(__name__)
 app.json_encoder = encoder.MongoEncoder
+app.config['SECRET_KEY'] = secrets.token_bytes()
 
 @app.route("/signup", methods = ["GET", "POST"])
 def signup():
@@ -46,8 +48,11 @@ def signup():
 @app.route("/signin", methods = ["GET"])
 def signin():
     """
-    Signs user into the application.
+    Signs user into the application, if they have already signed up.
     """
+    if 'userID' in session:
+        return "User is already logged in!"
+
     if "username" not in request.args:
         return "ERROR: user did not supply a username"
     elif "password" not in request.args:
@@ -65,11 +70,15 @@ def signin():
         return "ERROR: username or password is not correct!"
 
     response = make_response("Generating user cookie")
-    response.set_cookie("userID", str(current_user.get("_id")).encode("utf-8"))
+    session['userID'] = current_user["_id"]
  
     return response
 
+@app.route("/signout", methods = ["GET", "POST"])
 def signout():
+    """
+    Signs user out of the application, if they are currently signed in.
+    """
     pass
 
 @app.route("/boards", methods = ["GET"])
@@ -77,7 +86,7 @@ def view_boards():
     """
     Loads all of a users' boards onto a single page to view.
     """
-    userid = request.cookies.get("userID")
+    userid = session["userID"]
     
     users = database.connect("users")
     boards = database.connect("boards")
@@ -104,7 +113,7 @@ def create_board():
     Creates a new board for the logged in user. Fails if the given
     board name already exists for the user.
     """
-    userid = request.cookies.get("userID")
+    userid = session["userID"]
     board_name = request.args["board_name"]
     
     users = database.connect("users")
@@ -145,7 +154,7 @@ def get_board(board_name):
     Loads a board for the logged in user. Fails if the given
     board name does not exist for the user.
     """
-    userid = request.cookies.get("userID")
+    userid = session["userID"]
 
     users = database.connect("users")
     boards = database.connect("boards")
@@ -164,13 +173,29 @@ def get_board(board_name):
     
     return "ERROR: user does not have a board with the given name"
 
-@app.route("/boards/<board_name>/add", methods = ["GET", "POST"])
+@app.route("/boards/<board_name>/new", methods = ["GET", "POST"])
 def add_item(board_name):
+    """
+    Adds a new item to the specified board, if it exists. By default,
+    adds the item to the todo board.
+    """
     pass
 
-def update_details(user, board, item_id, new_details):
+@app.route("/boards/<board_name>/<item_id>", methods = ["GET"])
+def view_item(board_name, item_id):
+    """
+    View the item with the provided item id in the specified board,
+    if the board exists and the item id is present.
+    """
     pass
 
-def update_status(user, board, item_id, new_status): 
+@app.route("/boards/<board_name>/<item_id>/update")
+def update_item(board_name, item_id):
+    """
+    Updates the item with the provided item id in the specified board,
+    if the board exists and item id is present. Can update category, 
+    title, or description.
+    """
     pass
+
 
