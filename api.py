@@ -3,6 +3,7 @@ import flask
 import secrets
 from bson.objectid import ObjectId
 from flask import jsonify, make_response, request, session
+from functools import wraps
 
 import database
 import encoder
@@ -10,6 +11,19 @@ import encoder
 app = flask.Flask(__name__)
 app.json_encoder = encoder.MongoEncoder
 app.config['SECRET_KEY'] = secrets.token_bytes()
+
+def verify_login(f):
+    """
+    Decorator to verify that users are logged in before attempting 
+    board operations.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        if not session.get("userID"):
+            flask.flash("You must be logged in to continue.")
+            return flask.redirect(flask.url_for("signin"))
+        return f(*args, **kwds)
+    return wrapper
 
 @app.route("/signup", methods = ["GET", "POST"])
 def signup():
@@ -75,13 +89,16 @@ def signin():
     return response
 
 @app.route("/signout", methods = ["GET", "POST"])
+@verify_login
 def signout():
     """
     Signs user out of the application, if they are currently signed in.
     """
-    pass
-
+    session.pop("userID", None)
+    return "You have been logged out successfully."
+    
 @app.route("/boards", methods = ["GET"])
+@verify_login
 def view_boards():
     """
     Loads all of a users' boards onto a single page to view.
@@ -108,6 +125,7 @@ def view_boards():
     return response
 
 @app.route("/boards/new", methods = ["GET", "POST"])
+@verify_login
 def create_board():
     """
     Creates a new board for the logged in user. Fails if the given
@@ -149,6 +167,7 @@ def create_board():
     return "Successfully created new board"
 
 @app.route("/boards/<board_name>", methods = ["GET"])
+@verify_login
 def get_board(board_name):
     """
     Loads a board for the logged in user. Fails if the given
@@ -173,15 +192,45 @@ def get_board(board_name):
     
     return "ERROR: user does not have a board with the given name"
 
-@app.route("/boards/<board_name>/new", methods = ["GET", "POST"])
-def add_item(board_name):
+@app.route("/boards/<board_id>/new", methods = ["GET", "POST"])
+@verify_login
+def add_item(board_id):
     """
     Adds a new item to the specified board, if it exists. By default,
     adds the item to the todo board.
     """
-    pass
+    userid = session["userID"]
+
+    title = request.args["title"]
+    description = request.args["description"]
+
+    users = database.connect("users")
+    boards = database.connect("boards")
+
+    current_user = users.find_one({"_id": ObjectId(userid)})
+    if not current_user:
+        return "ERROR: there was an error finding the user"
+
+    current_board = boards.find_one({"_id": ObjectId(board_id)})
+    if current_board["userID"] != userid:
+        return "ERROR: you do not have acccess to this board!"
+
+    new_item = {
+        "title": title,
+        "description": description,
+        "status": "todo"
+    }
+
+    update_result = boards.update_one({"_id": ObjectId(board_id)}, 
+        {"$push": {"lists.todo": new_item}})
+    if not update_result.acknowledged:
+        return "ERROR: failed to add new item to board"
+
+    return "Successfully added new item"
+
 
 @app.route("/boards/<board_name>/<item_id>", methods = ["GET"])
+@verify_login
 def view_item(board_name, item_id):
     """
     View the item with the provided item id in the specified board,
@@ -190,6 +239,7 @@ def view_item(board_name, item_id):
     pass
 
 @app.route("/boards/<board_name>/<item_id>/update")
+@verify_login
 def update_item(board_name, item_id):
     """
     Updates the item with the provided item id in the specified board,
