@@ -36,19 +36,24 @@ def signup():
     Registers a new user in the database, if there is no account
     currently associated with the username.
     """
-    if "username" not in request.form:
-        return "ERROR: user did not supply a username"
-    elif "password" not in request.form:
-        return "ERROR: user did not supply a password"
+    if "username" not in request.json:
+        return make_response(
+            jsonify({"message": "User did not supply a username", "authenticated": False}), 401
+        )
+    elif "password" not in request.json:
+        return make_response(
+            jsonify({"message": "User did not supply a username", "authenticated": False}), 401
+        )
 
-    username = request.form["username"]
-    password = request.form["password"]
+    username = request.json["username"]
+    password = request.json["password"]
 
     users = DatabaseClient.connect("users")
-
-    print("Connected to users table.")
+    
     if users.count_documents({"username": username}) != 0:
-        return "ERROR: there is already an account registered under this username!"
+        return make_response(
+            jsonify({"message": "There is already an account registered under this username", "authenticated": False}), 401
+        )
 
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
 
@@ -61,8 +66,10 @@ def signup():
 
     result = users.insert_one(new_user)
     if not result.acknowledged:
-        return "ERROR: failed to create new user"
-    return redirect("/api/boards")
+        return make_response(
+            jsonify({"message": "Failed to initialize new user", "authenticated": False}), 401
+        )
+    return make_response(jsonify({"message": "", "authenticated": True}), 200)
 
 @app.route("/api/signin", methods = ["GET", "POST"])
 def signin():
@@ -70,28 +77,39 @@ def signin():
     Signs user into the application, if they have already signed up.
     """
     if 'userID' in session:
-        return "User is already logged in!"
+        return make_response(
+            jsonify({"message": "User is already logged in!", "authenticated": True}), 200
+        )
 
-    if "username" not in request.form:
-        return "ERROR: user did not supply a username"
-    elif "password" not in request.form:
-        return "ERROR: user did not supply a password"
+    if "username" not in request.json:
+        return make_response(
+            jsonify({"message": "User did not supply a username", "authenticated": False}), 401
+        )
 
-    username = request.form["username"]
-    password = request.form["password"]
+    elif "password" not in request.json:
+        return make_response(
+            jsonify({"message": "User did not supply a password", "authenticated": False}), 401
+        )
+
+    username = request.json["username"]
+    password = request.json["password"]
 
     users = DatabaseClient.connect("users")
     
     current_user = users.find_one({"username": username})
     if not current_user:
-        return "ERROR: there is not an account registered under this username!"
+        return make_response(
+            jsonify({"message": "Incorrect username or password", "authenticated": False}), 401
+        )
     if not bcrypt.checkpw(password.encode("utf-8"), current_user.get("hashed_pwd")):
-        return "ERROR: username or password is not correct!"
+        return make_response(
+            jsonify({"message": "Incorrect username or password", "authenticated": False}), 401
+        )
 
-    response = make_response("Generating user cookie")
+    # response = make_response("Generating user cookie")
     session['userID'] = current_user["_id"]
  
-    return redirect("/api/boards")
+    return jsonify({"message": "OK", "authenticated": True})
 
 @app.route("/api/signout", methods = ["GET", "POST"])
 @verify_login
@@ -100,7 +118,7 @@ def signout():
     Signs user out of the application, if they are currently signed in.
     """
     session.pop("userID", None)
-    return "You have been logged out successfully."
+    return make_response(jsonify({"message": "You have been logged out successfully."}), 200)
     
 @app.route("/api/boards", methods = ["GET"])
 @verify_login

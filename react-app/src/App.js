@@ -4,8 +4,21 @@ import Navbar from 'react-bootstrap/Navbar'
 import Nav from 'react-bootstrap/Nav'
 import { LinkContainer } from 'react-router-bootstrap'
 import Routes from "./Routes"
+import { AppContext } from "./libs/contextLib"
 
 function App() {
+  const [isLoggedIn, userHasLoggedIn] = useState(false);
+
+  function handleSignOut() {
+    userHasLoggedIn(false);
+    fetch('/api/signout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+  }
+
   return (
     <div className="App container py-3">
       <Navbar collapseOnSelect bg="light" expand="md" className="mb-3">
@@ -17,16 +30,24 @@ function App() {
         <Navbar.Toggle />
         <Navbar.Collapse className="justify-content-end">
         <Nav activeKey={window.location.pathname}>
-            <LinkContainer to="/signup">
-              <Nav.Link>Sign up</Nav.Link>
-            </LinkContainer>
-            <LinkContainer to="/signin">
-              <Nav.Link>Sign in</Nav.Link>
-            </LinkContainer>
+          {isLoggedIn ? (
+              <Nav.Link onClick={handleSignOut}>Sign Out</Nav.Link>
+            ) : (
+              <>
+                  <LinkContainer to="/signup">
+                    <Nav.Link>Sign up</Nav.Link>
+                  </LinkContainer>
+                  <LinkContainer to="/signin">
+                    <Nav.Link>Sign in</Nav.Link>
+                  </LinkContainer>
+            </>
+            )}
           </Nav>
         </Navbar.Collapse>
       </Navbar>
+      <AppContext.Provider value ={{isLoggedIn, userHasLoggedIn}}>
       <Routes />
+      </AppContext.Provider>
     </div>
   );
 }
