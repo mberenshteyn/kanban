@@ -1,13 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'
 import './App.css';
 import Navbar from 'react-bootstrap/Navbar'
 import Nav from 'react-bootstrap/Nav'
 import { LinkContainer } from 'react-router-bootstrap'
-import Routes from "./Routes"
-import { AppContext } from "./libs/contextLib"
+import Cookies from 'js-cookie'
+import { useHistory } from 'react-router-dom'
+import Routes from './Routes'
+import { AppContext } from './libs/contextLib'
 
 function App() {
+  const history = useHistory();
   const [isLoggedIn, userHasLoggedIn] = useState(false);
+
+  useEffect(() => {onLoad();}, [])
+
+  function onLoad() {
+    console.log("checking if logged in");
+    console.log(Cookies.get('session'))
+    if (Cookies.get('session')) {
+      userHasLoggedIn(true);
+      console.log("verifying user is logged in");
+    }
+  }
 
   function handleSignOut() {
     userHasLoggedIn(false);
@@ -17,6 +31,7 @@ function App() {
         'Content-Type': 'application/json',
       }
     })
+    history.push("/signin");
   }
 
   return (
@@ -46,7 +61,7 @@ function App() {
         </Navbar.Collapse>
       </Navbar>
       <AppContext.Provider value ={{isLoggedIn, userHasLoggedIn}}>
-      <Routes />
+        <Routes />
       </AppContext.Provider>
     </div>
   );

@@ -2,10 +2,12 @@ import React, { useState } from 'react'
 import Form from 'react-bootstrap/Form'
 import Button from 'react-bootstrap/Button'
 import Alert from 'react-bootstrap/Alert'
+import { useHistory } from 'react-router-dom'
 import { useAppContext } from "../libs/contextLib"
 import './SignUp.css'
 
 export default function SignUp() {
+    const history = useHistory();
     const { userHasLoggedIn } = useAppContext();
 
     const [username, setUsername] = useState("");
@@ -48,6 +50,7 @@ export default function SignUp() {
                 if (json["authenticated"]) {
                     userHasLoggedIn(true);
                     setSuccess(2);
+                    history.push('/');
                 } else {
                     setShow(true);
                     setSuccess(1);

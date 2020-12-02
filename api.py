@@ -49,7 +49,7 @@ def signup():
     password = request.json["password"]
 
     users = DatabaseClient.connect("users")
-    
+
     if users.count_documents({"username": username}) != 0:
         return make_response(
             jsonify({"message": "There is already an account registered under this username", "authenticated": False}), 401
@@ -106,7 +106,6 @@ def signin():
             jsonify({"message": "Incorrect username or password", "authenticated": False}), 401
         )
 
-    # response = make_response("Generating user cookie")
     session['userID'] = current_user["_id"]
  
     return jsonify({"message": "OK", "authenticated": True})
@@ -155,22 +154,28 @@ def create_board():
     board name already exists for the user.
     """
     userid = session["userID"]
-    board_name = request.args["board_name"]
+    board_name = request.json["board_name"]
+    info = request.json["info"]
     
     users = DatabaseClient.connect("users")
     boards = DatabaseClient.connect("boards")
 
     current_user = users.find_one({"_id": ObjectId(userid)})
     if not current_user:
-        return "ERROR: there was an error finding the user"
+        return make_response(
+            jsonify({"message": "Error identifying the user"}), 401
+        )
 
     curr_board_names = current_user["board_names"]
     if board_name in curr_board_names:
-        return "ERROR: user already has a board of the same name!"
+        return make_response(
+            jsonify({"message": "User has board with same name"}), 400
+        )
 
     new_board = {
         "board_name": board_name,
         "userID": userid,
+        "info": info,
         "lists": {
             "todo": [],
             "in_progress": [],
@@ -178,16 +183,22 @@ def create_board():
         }
     }
 
+    # To consider: possibly frame this as a single transaction to avoid being partially completed
+
     insert_result = boards.insert_one(new_board)
     if not insert_result.acknowledged:
-        return "ERROR: failed to create new board"
+        return make_response(
+            jsonify({"message": "Error creating the board"}), 401
+        )
     board_id = insert_result.inserted_id
     update_result = users.update_one({"_id": ObjectId(userid)}, 
         {"$push": {"board_ids": board_id, "board_names": board_name}})
     if not update_result.acknowledged:
-        return "ERROR: failed to add new board to user directory"
+        return make_response(
+            jsonify({"message": "Error creating the board"}), 401
+        )
 
-    return "Successfully created new board"
+    return make_response(jsonify({"message": "Successfully created new board"}), 201)
 
 @app.route("/api/boards/<board_name>", methods = ["GET"])
 @verify_login
