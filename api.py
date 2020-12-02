@@ -2,15 +2,16 @@ import bcrypt
 import flask
 import secrets
 from bson.objectid import ObjectId
-from flask import jsonify, make_response, request, session
+from flask import jsonify, make_response, redirect, render_template, request, session
 from functools import wraps
 
-import database
 import encoder
+from database import DatabaseClient
 
 app = flask.Flask(__name__)
 app.json_encoder = encoder.MongoEncoder
 app.config['SECRET_KEY'] = secrets.token_bytes()
+DatabaseClient.initialize_client()
 
 def verify_login(f):
     """
@@ -25,21 +26,25 @@ def verify_login(f):
         return f(*args, **kwds)
     return wrapper
 
-@app.route("/signup", methods = ["GET", "POST"])
+@app.route("/", methods = ["GET", "POST"])
+def index():
+    return render_template('index.html')
+
+@app.route("/api/signup", methods = ["GET", "POST"])
 def signup():
     """
     Registers a new user in the database, if there is no account
     currently associated with the username.
     """
-    if "username" not in request.args:
+    if "username" not in request.form:
         return "ERROR: user did not supply a username"
-    elif "password" not in request.args:
+    elif "password" not in request.form:
         return "ERROR: user did not supply a password"
 
-    username = request.args["username"]
-    password = request.args["password"]
+    username = request.form["username"]
+    password = request.form["password"]
 
-    users = database.connect("users")
+    users = DatabaseClient.connect("users")
 
     print("Connected to users table.")
     if users.count_documents({"username": username}) != 0:
@@ -57,9 +62,9 @@ def signup():
     result = users.insert_one(new_user)
     if not result.acknowledged:
         return "ERROR: failed to create new user"
-    return "OK"
+    return redirect("/api/boards")
 
-@app.route("/signin", methods = ["GET"])
+@app.route("/api/signin", methods = ["GET", "POST"])
 def signin():
     """
     Signs user into the application, if they have already signed up.
@@ -67,15 +72,15 @@ def signin():
     if 'userID' in session:
         return "User is already logged in!"
 
-    if "username" not in request.args:
+    if "username" not in request.form:
         return "ERROR: user did not supply a username"
-    elif "password" not in request.args:
+    elif "password" not in request.form:
         return "ERROR: user did not supply a password"
 
-    username = request.args["username"]
-    password = request.args["password"]
+    username = request.form["username"]
+    password = request.form["password"]
 
-    users = database.connect("users")
+    users = DatabaseClient.connect("users")
     
     current_user = users.find_one({"username": username})
     if not current_user:
@@ -86,9 +91,9 @@ def signin():
     response = make_response("Generating user cookie")
     session['userID'] = current_user["_id"]
  
-    return response
+    return redirect("/api/boards")
 
-@app.route("/signout", methods = ["GET", "POST"])
+@app.route("/api/signout", methods = ["GET", "POST"])
 @verify_login
 def signout():
     """
@@ -97,7 +102,7 @@ def signout():
     session.pop("userID", None)
     return "You have been logged out successfully."
     
-@app.route("/boards", methods = ["GET"])
+@app.route("/api/boards", methods = ["GET"])
 @verify_login
 def view_boards():
     """
@@ -105,8 +110,8 @@ def view_boards():
     """
     userid = session["userID"]
     
-    users = database.connect("users")
-    boards = database.connect("boards")
+    users = DatabaseClient.connect("users")
+    boards = DatabaseClient.connect("boards")
     boards.create_index("userID")
 
     current_user = users.find_one({"_id": ObjectId(userid)})
@@ -124,7 +129,7 @@ def view_boards():
     response = make_response(jsonify(user_boards), 200)
     return response
 
-@app.route("/boards/new", methods = ["GET", "POST"])
+@app.route("/api/boards/new", methods = ["GET", "POST"])
 @verify_login
 def create_board():
     """
@@ -134,8 +139,8 @@ def create_board():
     userid = session["userID"]
     board_name = request.args["board_name"]
     
-    users = database.connect("users")
-    boards = database.connect("boards")
+    users = DatabaseClient.connect("users")
+    boards = DatabaseClient.connect("boards")
 
     current_user = users.find_one({"_id": ObjectId(userid)})
     if not current_user:
@@ -166,7 +171,7 @@ def create_board():
 
     return "Successfully created new board"
 
-@app.route("/boards/<board_name>", methods = ["GET"])
+@app.route("/api/boards/<board_name>", methods = ["GET"])
 @verify_login
 def get_board(board_name):
     """
@@ -175,8 +180,8 @@ def get_board(board_name):
     """
     userid = session["userID"]
 
-    users = database.connect("users")
-    boards = database.connect("boards")
+    users = DatabaseClient.connect("users")
+    boards = DatabaseClient.connect("boards")
 
     current_user = users.find_one({"_id": ObjectId(userid)})
     if not current_user:
@@ -192,7 +197,7 @@ def get_board(board_name):
     
     return "ERROR: user does not have a board with the given name"
 
-@app.route("/boards/<board_id>/new", methods = ["GET", "POST"])
+@app.route("/api/boards/<board_id>/new", methods = ["GET", "POST"])
 @verify_login
 def add_item(board_id):
     """
@@ -204,18 +209,14 @@ def add_item(board_id):
     title = request.args["title"]
     description = request.args["description"]
 
-    users = database.connect("users")
-    boards = database.connect("boards")
-
-    current_user = users.find_one({"_id": ObjectId(userid)})
-    if not current_user:
-        return "ERROR: there was an error finding the user"
+    boards = DatabaseClient.connect("boards")
 
     current_board = boards.find_one({"_id": ObjectId(board_id)})
     if current_board["userID"] != userid:
         return "ERROR: you do not have acccess to this board!"
 
     new_item = {
+        "_id": ObjectId(),
         "title": title,
         "description": description,
         "status": "todo"
@@ -229,23 +230,35 @@ def add_item(board_id):
     return "Successfully added new item"
 
 
-@app.route("/boards/<board_name>/<item_id>", methods = ["GET"])
+@app.route("/api/boards/<board_id>/<category>/<item_id>", methods = ["GET"])
 @verify_login
-def view_item(board_name, item_id):
+def view_item(board_id, category, item_id):
     """
     View the item with the provided item id in the specified board,
-    if the board exists and the item id is present.
+    if the board exists and the item id is present in the category.
     """
-    pass
+    userid = session["userID"]
 
-@app.route("/boards/<board_name>/<item_id>/update")
+    boards = DatabaseClient.connect("boards")
+
+    current_board = boards.find_one({"_id": ObjectId(board_id)})
+    if current_board["userID"] != userid:
+        return "ERROR: you do not have acccess to this board!"
+
+    for item in current_board["lists"][category]:
+        if item["_id"] == ObjectId(item_id):
+            response = make_response(jsonify(item))
+            return response
+    
+    return "ERROR: the item was not present in the board"
+
+@app.route("/api/boards/<board_id>/<category>/<item_id>/update")
 @verify_login
-def update_item(board_name, item_id):
+def update_item(board_id, category, item_id):
     """
     Updates the item with the provided item id in the specified board,
     if the board exists and item id is present. Can update category, 
     title, or description.
     """
     pass
-
 

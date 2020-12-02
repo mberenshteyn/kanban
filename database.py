@@ -1,29 +1,32 @@
 from pymongo import MongoClient
 import configparser
 
-def initialize_client():
-    """
-    Initializes a MongoClient based on the username, password, and database
-    name stored in the config.ini file.
-    """
+class DatabaseClient:
+    client = None
 
-    config = configparser.ConfigParser()
-    config.read("config.ini")
+    @classmethod
+    def initialize_client(cls, db = "test"):
+        """
+        Initializes a MongoClient based on the supplied database and the 
+        username, password, and database name stored in the config.ini file.
+        """
 
-    username = config["mongodb"]["user"]
-    password = config["mongodb"]["password"]
-    dbname = config["mongodb"]["dbname"]
+        config = configparser.ConfigParser()
+        config.read("config.ini")
 
-    print("Attempting to initialize client ...")
-    client = MongoClient(f"mongodb+srv://{username}:{password}@cluster0.kcedc.mongodb.net/{dbname}?retryWrites=true&w=majority")
-    print("Successfully initialized client")
+        username = config["mongodb"]["user"]
+        password = config["mongodb"]["password"]
+        dbname = config["mongodb"]["dbname"]
 
-    return client
+        print("Attempting to initialize client ...")
+        DatabaseClient.client = MongoClient(f"mongodb+srv://{username}:{password}@cluster0.kcedc.mongodb.net/{dbname}?retryWrites=true&w=majority")[db]
+        print("Successfully initialized client")
 
-def connect(collection: str, db = "test"):
-    """
-    Initializes the MongoDB client and connects to a specific collection in the client.
-    """
-    return client[db][collection]
-
-client = initialize_client()
+    @classmethod
+    def connect(cls, collection: str):
+        """
+        Initializes the MongoDB client and connects to a specific collection in the client.
+        """
+        if DatabaseClient.client is None:
+            DatabaseClient.client = DatabaseClient.initialize_client()
+        return DatabaseClient.client[collection]
