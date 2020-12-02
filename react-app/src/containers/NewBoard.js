@@ -36,7 +36,7 @@ export default function NewBoard() {
               },
             body: JSON.stringify({board_name: title, info: content}),
         }).then(response => {
-            if (response.status === 201) {
+            if (response.ok) {
                 setSuccess(2);
                 history.push('/');
             } else {

@@ -69,6 +69,14 @@ def signup():
         return make_response(
             jsonify({"message": "Failed to initialize new user", "authenticated": False}), 401
         )
+
+    current_user = users.find_one({"username": username})
+    if not current_user:
+        return make_response(
+            jsonify({"message": "Incorrect username or password", "authenticated": False}), 401
+        )
+
+    session['userID'] = current_user["_id"]
     return make_response(jsonify({"message": "", "authenticated": True}), 200)
 
 @app.route("/api/signin", methods = ["GET", "POST"])
@@ -116,6 +124,7 @@ def signout():
     """
     Signs user out of the application, if they are currently signed in.
     """
+    session.pop("session", None)
     session.pop("userID", None)
     return make_response(jsonify({"message": "You have been logged out successfully."}), 200)
     
@@ -133,14 +142,14 @@ def view_boards():
 
     current_user = users.find_one({"_id": ObjectId(userid)})
     if not current_user:
-        return "ERROR: there was an error finding the user"
+        return make_response(jsonify({"message": "ERROR: User does not exist"}), 500)
 
     user_boards = []
     user_boardIDs = current_user["board_ids"]
     for boardID in user_boardIDs:
         board = boards.find_one({"_id": boardID})
         if not board:
-            return "ERROR: there was an issue loading a users' board"
+            return make_response(jsonify({"message": "ERROR: Board does not exist"}), 400)
         user_boards.append(board)
     
     response = make_response(jsonify(user_boards), 200)
@@ -188,14 +197,14 @@ def create_board():
     insert_result = boards.insert_one(new_board)
     if not insert_result.acknowledged:
         return make_response(
-            jsonify({"message": "Error creating the board"}), 401
+            jsonify({"message": "Error creating the board"}), 500
         )
     board_id = insert_result.inserted_id
     update_result = users.update_one({"_id": ObjectId(userid)}, 
         {"$push": {"board_ids": board_id, "board_names": board_name}})
     if not update_result.acknowledged:
         return make_response(
-            jsonify({"message": "Error creating the board"}), 401
+            jsonify({"message": "Error creating the board"}), 500
         )
 
     return make_response(jsonify({"message": "Successfully created new board"}), 201)
